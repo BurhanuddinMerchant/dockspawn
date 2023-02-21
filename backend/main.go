@@ -314,7 +314,7 @@ func terminal_process(container_id string, ws websocket.Conn) {
 	ctx := context.Background()
 	cli, err := client.NewEnvClient()
 	term_size := [2]uint{80, 24}
-	exec_cfg := types.ExecConfig{User: "", Privileged: false, Tty: false, ConsoleSize: &term_size, AttachStdin: true, AttachStdout: true, AttachStderr: true, Detach: true, DetachKeys: "", Env: nil, WorkingDir: "/", Cmd: []string{"sh", "-c"}}
+	exec_cfg := types.ExecConfig{User: "", Privileged: false, Tty: true, ConsoleSize: &term_size, AttachStdin: true, AttachStdout: true, AttachStderr: true, Detach: true, DetachKeys: "", Env: nil, WorkingDir: "/", Cmd: []string{"sh", "-c"}}
 	if err != nil {
 		log.Fatal(err, " :unable to init client")
 	}
@@ -337,46 +337,203 @@ func terminal_process(container_id string, ws websocket.Conn) {
 	// defer hresp.Close()
 	// use the response object to stream the output of the command
 	log.Println(hresp.Conn)
-	go func() {
-		for {
-			log.Println("buffer me: ", hresp.Reader.Buffered())
-			// if hresp.Reader.Buffered() > 0 {
 
-			var buf = make([]byte, 1024)
-			n, err := hresp.Conn.Read(buf)
+	for {
+		log.Println("buffer me: ", hresp.Reader.Buffered())
+		// if hresp.Reader.Buffered() > 0 {
 
-			fmt.Println("n: ", n)
-			if err != nil {
-				fmt.Println("error", err)
-			}
-			fmt.Print("askljfjlskdjfklas", string(buf[:n]))
-			if n != 0 {
-				err = ws.WriteMessage(websocket.TextMessage, buf[:n])
-				// }
-				if err != nil {
-					fmt.Println(err)
-				}
-			}
+		var buf = make([]byte, 1024)
+		n, err := hresp.Conn.Read(buf)
+
+		fmt.Println("n: ", n)
+		if err != nil {
+			fmt.Println("error", err)
+		}
+		fmt.Print("askljfjlskdjfklas", string(buf[:n]))
+		if n != 0 {
+			err = ws.WriteMessage(websocket.TextMessage, buf[:n])
 			// }
-			_, msg, err := ws.ReadMessage()
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
+		// }
+		_, msg, err := ws.ReadMessage()
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		log.Println("err***", err)
+		log.Println("*****", msg)
+		if len(msg) > 0 {
+			fmt.Println(msg)
+			bytes_written, err := hresp.Conn.Write(msg)
+
 			if err != nil {
 				log.Println(err)
+			}
+			log.Println(bytes_written)
+		}
+	}
+
+}
+
+// func terminal_process(container_id string, ws websocket.Conn) {
+
+// !!!! working code commented !!!!!!!!!
+
+// 	ctx := context.Background()
+// 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+// 	if err != nil {
+// 		log.Fatal(err, " :unable to init client")
+// 	}
+// 	term_size := [2]uint{80, 24}
+// 	exec_cfg := types.ExecConfig{
+// 		User:         "",
+// 		Privileged:   false,
+// 		Tty:          true,
+// 		ConsoleSize:  &term_size,
+// 		AttachStdin:  true,
+// 		AttachStdout: true,
+// 		AttachStderr: true,
+// 		Detach:       false,
+// 		Env:          nil,
+// 		WorkingDir:   "/",
+// 		Cmd:          []string{"sh", "-c", "TERM=xterm-256color /bin/bash"},
+// 	}
+// 	exec_id, err := cli.ContainerExecCreate(ctx, container_id, exec_cfg)
+// 	if err != nil {
+// 		log.Println("Container Exec Create failed:", err)
+// 		return
+// 	}
+// 	log.Println("Container Exec Create success")
+// 	exec_start_opts := types.ExecStartCheck{Tty: true}
+// 	hresp, err := cli.ContainerExecAttach(ctx, exec_id.ID, exec_start_opts)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	defer hresp.Close()
+// 	go func() {
+// 		for {
+// 			_, msg, err := ws.ReadMessage()
+// 			if err != nil {
+// 				log.Println(err)
+// 				return
+// 			}
+// 			log.Println("Received message:", msg)
+// 			_, err = hresp.Conn.Write(msg)
+// 			if err != nil {
+// 				log.Println("Failed to write message to container:", err)
+// 				return
+// 			}
+// 		}
+// 	}()
+// 	for {
+// 		var buf = make([]byte, 1024)
+// 		n, err := hresp.Reader.Read(buf)
+// 		if err != nil {
+// 			if err != io.EOF {
+// 				log.Println("Failed to read response from container:", err)
+// 			}
+// 			return
+// 		}
+// 		log.Printf("Received %d bytes from container: %s", n, buf[:n])
+// 		err = ws.WriteMessage(websocket.TextMessage, buf[:n])
+// 		if err != nil {
+// 			log.Println("Failed to write message to WebSocket:", err)
+// 			return
+// 		}
+// 	}
+// }
+func terminal_process__optimized(container_id string, ws websocket.Conn) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cli, err := client.NewEnvClient()
+	if err != nil {
+		log.Fatal(err, " :unable to init client")
+	}
+
+	term_size := [2]uint{80, 24}
+	exec_cfg := types.ExecConfig{
+		User:         "",
+		Privileged:   false,
+		Tty:          true,
+		ConsoleSize:  &term_size,
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+		Detach:       false,
+		Env:          nil,
+		WorkingDir:   "/",
+		Cmd:          []string{"sh", "-c", "TERM=xterm-256color /bin/bash"},
+	}
+	exec_id, err := cli.ContainerExecCreate(ctx, container_id, exec_cfg)
+	if err != nil {
+		log.Fatal("Container Exec Create failed: ", err)
+	}
+	log.Println("Container Exec Create success")
+
+	exec_config := types.ExecStartCheck{Detach: false, Tty: true, ConsoleSize: &term_size}
+	hresp, err := cli.ContainerExecAttach(ctx, exec_id.ID, exec_config)
+	if err != nil {
+		log.Fatal("Container Exec Attach failed: ", err)
+	}
+	defer hresp.Close()
+
+	// use channels to handle communication between the websocket and the response object
+	responseCh := make(chan []byte)
+	errorCh := make(chan error)
+
+	go func() {
+		var buf = make([]byte, 1024)
+		for {
+			n, err := hresp.Reader.Read(buf)
+			if err != nil {
+				errorCh <- err
 				return
 			}
-			log.Println("err***", err)
-			log.Println("*****", msg)
-			if len(msg) > 0 {
-				fmt.Println(msg)
-				bytes_written, err := hresp.Conn.Write(msg)
-
-				if err != nil {
-					log.Println(err)
-				}
-				log.Println(bytes_written)
+			if n != 0 {
+				responseCh <- buf[:n]
 			}
 		}
 	}()
 
+	go func() {
+		for {
+			_, msg, err := ws.ReadMessage()
+			if err != nil {
+				errorCh <- err
+				return
+			}
+			if len(msg) > 0 {
+				_, err := hresp.Conn.Write(msg)
+				if err != nil {
+					errorCh <- err
+					return
+				}
+			}
+		}
+	}()
+
+	// listen for messages from the channels and send them to the websocket
+	for {
+		select {
+		case response := <-responseCh:
+			err = ws.WriteMessage(websocket.TextMessage, response)
+			if err != nil {
+				log.Println("Websocket write error: ", err)
+				cancel()
+				return
+			}
+		case err := <-errorCh:
+			log.Println("Error: ", err)
+			cancel()
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 func main() {
 
@@ -396,7 +553,7 @@ func main() {
 
 		// TODO: Write logic for checking if container id has been sent from the frontend if not then start a new container
 		// // Start a goroutine to handle incoming WebSocket messages.
-		terminal_process("bb2b5f24febd", *conn)
+		terminal_process("9121a6b68025", *conn)
 		// _, msg, err := conn.ReadMessage()
 		// if err != nil {
 		// 	log.Println(err)
