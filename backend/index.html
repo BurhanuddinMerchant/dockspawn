@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Real-time Web Terminal</title>
+    <script src="https://unpkg.com/xterm@4.10.1/lib/xterm.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/xterm@4.10.1/css/xterm.css"
+    />
+  </head>
+  <body>
+    <div id="terminal"></div>
+
+    <script>
+      // Connect to the WebSocket endpoint.
+      const socket = new WebSocket("ws://" + window.location.host + "/ws");
+
+      // Create the terminal.
+      const term = new Terminal();
+      term.open(document.getElementById("terminal"));
+
+      // When the WebSocket connection is opened, send the initial message.
+      socket.addEventListener("open", function (event) {
+        socket.send("Hello, world!");
+      });
+
+      // When a message is received from the server, write it to the terminal.
+      socket.addEventListener("message", function (event) {
+        term.write(event.data);
+      });
+
+      // When the user types in the terminal, send the input to the server.
+      term.onData(function (data) {
+        socket.send(data);
+      });
+    </script>
+  </body>
+</html>
